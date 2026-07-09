@@ -6,7 +6,7 @@ Handles wallet, bank, work, give, and request commands
 
 import discord
 from discord.ext import commands
-import app_commands
+import app_commands from discord.py
 import random
 import logging
 
