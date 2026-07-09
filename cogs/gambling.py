@@ -5,8 +5,7 @@ Contains all casino game commands
 """
 
 import discord
-from discord.ext import commands
-import app_commands
+from discord.ext import commands, app_commands
 import random
 import asyncio
 import logging
