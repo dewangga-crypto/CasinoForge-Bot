@@ -58,6 +58,27 @@ class CasinoForge(commands.Bot):
         # Sets the Discord status to "Playing High Stakes | /help"
         await self.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="High Stakes | /help"))
 
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    # Check if the error is just a command cooldown
+    if isinstance(error, app_commands.CommandOnCooldown):
+        # Convert seconds into human-readable time (minutes/seconds)
+        seconds = error.retry_after
+        if seconds >= 60:
+            time_left = f"{int(seconds // 60)}m {int(seconds % 60)}s"
+        else:
+            time_left = f"{seconds:.1f}s"
+            
+        await interaction.response.send_message(
+            f"⏳ **Slow down!** You can use this command again in **{time_left}**.",
+            ephemeral=True
+        )
+        return
+
+    # If it's a different error, log it so you can still track real bugs
+    logger.error(f"Unhandled slash command error: {error}")
+
+
 async def main():
     # 2. Container Environment Variables
     # The bot securely reads your credentials from JustRunMy.App without hardcoding them
