@@ -58,7 +58,7 @@ class Creator(commands.Cog):
         embed.add_field(name="Latency", value=f"{self.bot.latency * 1000:.2f}ms", inline=True)
         embed.add_field(name="Guilds", value=len(self.bot.guilds), inline=True)
         
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="dev-shutdown", description="[Creator] Shutdown the bot.")
     @CreatorOnly()
@@ -66,7 +66,6 @@ class Creator(commands.Cog):
         """Developer: Shutdown bot."""
         await interaction.response.send_message(
             "🛑 Bot shutting down...",
-            ephemeral=True
         )
         logger.warning("Bot shutdown initiated by creator")
         await self.bot.close()
