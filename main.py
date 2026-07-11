@@ -78,7 +78,7 @@ class CasinoForge(commands.Bot):
 async def main():
     TOKEN = os.getenv("BOT_TOKEN")
     DATABASE_URL = os.getenv("DATABASE_URL")
-    CREATOR_IDS = [1075340640243691520] # Add more IDs here
+    CREATOR_IDS = [1075340640243691520, 1307955870713380884] # Add more IDs here
 
     if not TOKEN or not DATABASE_URL:
         logger.error("FATAL BOOT ERROR: BOT_TOKEN or DATABASE_URL missing from environment variables!")
