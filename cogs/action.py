@@ -119,7 +119,7 @@ class RequestConfirmView(discord.ui.View):
     async def decline(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         await interaction.followup.send(
-            f"❌ {self.target.mention} declined your request.",
+            f"❌ {self.target_user.mention} declined your request.",
             ephemeral=True
         )
         self.stop()
