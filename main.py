@@ -37,7 +37,7 @@ class CasinoForge(commands.Bot):
 
     async def setup_hook(self):
         # We will build these 5 files one by one next.
-        initial_cogs = ["cogs.gambling", "cogs.staff", "cogs.creator", "cogs.fun", "cogs.action"]
+        initial_cogs = ["cogs.gambling", "cogs.staff", "cogs.creator", "cogs.fun", "cogs.action", "cogs.beg"]
         
         # We use a try-except block here. This guarantees the bot boots perfectly today 
         # even though we haven't written the files in the cogs folder yet.
