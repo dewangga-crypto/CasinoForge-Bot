@@ -63,12 +63,22 @@ class GiveConfirmView(discord.ui.View):
         self.stop()
 
 class RequestConfirmView(discord.ui.View):
-    def __init__(self, db_pool, requester, target, amount):
-        super().__init__()
+    def __init__(self, db_pool, requester, target_user, amount):
+        super().__init__(timeout=60.0) 
         self.db_pool = db_pool
         self.requester = requester
-        self.target = target
+        self.target_user = target_user
         self.amount = amount
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.target_user.id:
+            await interaction.response.send_message(
+                f"❌ This request isn't for you! Only {self.target_user.mention} can respond.", 
+                ephemeral=True
+            )
+            return False 
+        return True 
+
 
     @discord.ui.button(label="Accept Request", style=discord.ButtonStyle.green, custom_id="req_accept")
     async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
