@@ -5,8 +5,8 @@ Moderation and economy management commands
 """
 
 import discord
-from discord.ext import commands, app_commands
-import logging
+from discord import app_commands
+from discord.ext import commands
 
 logger = logging.getLogger('CasinoForge.Staff')
 
