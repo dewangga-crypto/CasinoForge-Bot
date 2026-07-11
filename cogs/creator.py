@@ -107,6 +107,86 @@ class Creator(commands.Cog):
             ephemeral=True
         )
 
+    # let server owners pick where the spam goes
+    @app_commands.command(
+        name="global-announcement-setup", 
+        description="[Admin] Set the channel where global announcements will be received."
+    )
+    @app_commands.checks.has_permissions(manage_channels=True)
+    @app_commands.describe(channel="The channel where announcements should go")
+    async def global_announcement_setup(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        await interaction.response.defer(ephemeral=True)
+        
+        # shove this channel id into the database
+        async with self.bot.db_pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO server_settings (guild_id, announcement_channel_id)
+                VALUES ($1, $2)
+                ON CONFLICT (guild_id) 
+                DO UPDATE SET announcement_channel_id = EXCLUDED.announcement_channel_id
+                """,
+                str(interaction.guild_id),
+                str(channel.id)
+            )
+            
+        await interaction.followup.send(
+            f"✅ Successfully set {channel.mention} as this server's global announcement channel!",
+            ephemeral=True
+        )
+
+    # absolute power command for me only
+    @app_commands.command(
+        name="global-say", 
+        description="[Creator] Broadcast an announcement to all configured server channels."
+    )
+    @CreatorOnly()  
+    @app_commands.describe(message="The message or announcement content to broadcast everywhere")
+    async def global_say(self, interaction: discord.Interaction, message: str):
+        # defer right away so discord doesnt throw a tantrum while we loop
+        await interaction.response.defer(ephemeral=True)
+        
+        async with self.bot.db_pool.acquire() as conn:
+            rows = await conn.fetch("SELECT announcement_channel_id FROM server_settings")
+            
+        if not rows:
+            await interaction.followup.send(
+                "❌ No servers have configured a global announcement channel using `/global-announcement-setup` yet.",
+                ephemeral=True
+            )
+            return
+
+        success_count = 0
+        fail_count = 0
+
+        # blast the message to every server that set it up
+        for row in rows:
+            channel_id = int(row['announcement_channel_id'])
+            channel = self.bot.get_channel(channel_id)
+            
+            # look in the cache first, otherwise yell at discord's api
+            if channel is None:
+                try:
+                    channel = await self.bot.fetch_channel(channel_id)
+                except Exception:
+                    fail_count += 1
+                    continue
+                    
+            try:
+                await channel.send(message)
+                success_count += 1
+            except Exception:
+                # probably got kicked or channel got nuked, just skip it lol
+                fail_count += 1
+
+        await interaction.followup.send(
+            f"📢 **Global Announcement Dispatched!**\n"
+            f"✅ Sent successfully to **{success_count}** channel(s).\n"
+            f"❌ Failed/Skipped **{fail_count}** channel(s) due to missing permissions.",
+            ephemeral=True
+        )
+
+
 async def setup(bot: commands.Bot):
     await bot.add_cog(Creator(bot))
     logger.info("Creator cog loaded")
