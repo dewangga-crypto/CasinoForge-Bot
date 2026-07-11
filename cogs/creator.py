@@ -29,7 +29,7 @@ class Creator(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="maintenance", description="[Creator] Toggles global maintenance mode.")
+    @app_commands.command(name="dev-maintenance", description="[Creator] Toggles global maintenance mode.")
     @CreatorOnly()
     async def maintenance(self, interaction: discord.Interaction):
         """Toggle maintenance mode."""
@@ -136,7 +136,7 @@ class Creator(commands.Cog):
         )
 
     @app_commands.command(
-        name="global-announcement-setup", 
+        name="glbl-announce-setup", 
         description="[Admin] Set the channel where global announcements will be received."
     )
     @app_commands.checks.has_permissions(manage_channels=True)
