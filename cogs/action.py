@@ -88,7 +88,7 @@ class RequestConfirmView(discord.ui.View):
             async with conn.transaction():
                 target_bal = await conn.fetchval(
                     "SELECT wallet FROM users WHERE user_id = $1 AND is_frozen = FALSE AND is_blacklisted = FALSE",
-                    str(self.target.id)
+                    str(self.target_user.id)
                 )
                 
                 if target_bal is None or target_bal < self.amount:
@@ -101,7 +101,7 @@ class RequestConfirmView(discord.ui.View):
                 await conn.execute(
                     "UPDATE users SET wallet = wallet - $1 WHERE user_id = $2",
                     self.amount,
-                    str(self.target.id)
+                    str(self.target_user.id)
                 )
                 
                 await conn.execute(
@@ -111,7 +111,7 @@ class RequestConfirmView(discord.ui.View):
                 )
         
         await interaction.followup.send(
-            f"✅ {self.target.mention} sent **{self.amount:,}** coins to {self.requester.mention}!"
+            f"✅ {self.target_user.mention} sent **{self.amount:,}** coins to {self.requester.mention}!"
         )
         self.stop()
 
