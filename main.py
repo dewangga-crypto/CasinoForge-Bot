@@ -4,6 +4,7 @@ CasinoForge - Core Engine
 """
 
 import discord
+from discord import app_commands  # 👈 Added this missing import!
 from discord.ext import commands
 import asyncpg
 import os
@@ -11,7 +12,6 @@ import asyncio
 import logging
 
 # 1. Advanced Logging Setup
-# This ensures all errors/connections are visible in your JustRunMy.App console
 logging.basicConfig(
     level=logging.INFO, 
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -20,27 +20,24 @@ logger = logging.getLogger('CasinoForge')
 
 class CasinoForge(commands.Bot):
     def __init__(self, db_pool: asyncpg.Pool, creator_id: int):
-        # Intents allow the bot to read message states and sync data
         intents = discord.Intents.default()
         intents.message_content = True
         
         super().__init__(
-            command_prefix="!", # Fallback dev prefix, standard users will use / commands
+            command_prefix="!", 
             intents=intents,
-            help_command=None # We will write a dynamic custom help slash command later
+            help_command=None 
         )
         
-        # Attach the database pool and your developer ID directly to the bot instance 
-        # so every single command file can access them instantly.
         self.db_pool = db_pool
         self.creator_id = creator_id
 
     async def setup_hook(self):
-        # We will build these 5 files one by one next.
+        # Attach the error handler directly to the tree inside the setup hook safely
+        self.tree.on_error = self.on_app_command_error
+
         initial_cogs = ["cogs.gambling", "cogs.staff", "cogs.creator", "cogs.fun", "cogs.action", "cogs.beg"]
         
-        # We use a try-except block here. This guarantees the bot boots perfectly today 
-        # even though we haven't written the files in the cogs folder yet.
         for cog in initial_cogs:
             try:
                 await self.load_extension(cog)
@@ -48,45 +45,39 @@ class CasinoForge(commands.Bot):
             except Exception as e:
                 logger.warning(f"Skipped loading {cog} (File not built yet): {e}")
 
-        # Registers all slash commands globally to Discord's servers
         logger.info("Syncing slash commands globally... (This takes a moment)")
         await self.tree.sync()
         logger.info("Global slash commands synced successfully!")
 
     async def on_ready(self):
         logger.info(f"Bot Online! Logged in as {self.user.name} (ID: {self.user.id})")
-        # Sets the Discord status to "Playing High Stakes | /help"
         await self.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="High Stakes | /help"))
 
-@bot.tree.error
-async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
-    # Check if the error is just a command cooldown
-    if isinstance(error, app_commands.CommandOnCooldown):
-        # Convert seconds into human-readable time (minutes/seconds)
-        seconds = error.retry_after
-        if seconds >= 60:
-            time_left = f"{int(seconds // 60)}m {int(seconds % 60)}s"
-        else:
-            time_left = f"{seconds:.1f}s"
-            
-        await interaction.response.send_message(
-            f"⏳ **Slow down!** You can use this command again in **{time_left}**.",
-            ephemeral=True
-        )
-        return
+    # 👈 This is the clean, built-in way to catch cooldown spam perfectly!
+    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.CommandOnCooldown):
+            seconds = error.retry_after
+            if seconds >= 60:
+                time_left = f"{int(seconds // 60)}m {int(seconds % 60)}s"
+            else:
+                time_left = f"{seconds:.1f}s"
+                
+            try:
+                await interaction.response.send_message(
+                    f"⏳ **Slow down!** You can use this command again in **{time_left}**.",
+                    ephemeral=True
+                )
+            except Exception:
+                pass
+            return
 
-    # If it's a different error, log it so you can still track real bugs
-    logger.error(f"Unhandled slash command error: {error}")
+        logger.error(f"Unhandled slash command error: {error}")
 
 
 async def main():
-    # 2. Container Environment Variables
-    # The bot securely reads your credentials from JustRunMy.App without hardcoding them
     TOKEN = os.getenv("BOT_TOKEN")
     DATABASE_URL = os.getenv("DATABASE_URL")
-    
-    # We can hardcode this safely since User IDs are strictly public info, not secure tokens.
-    CREATOR_ID =  1075340640243691520
+    CREATOR_ID = 1075340640243691520
 
     if not TOKEN or not DATABASE_URL:
         logger.error("FATAL BOOT ERROR: BOT_TOKEN or DATABASE_URL missing from environment variables!")
@@ -94,14 +85,12 @@ async def main():
 
     logger.info("Initializing Supabase database connection pool...")
     try:
-        # command_timeout=30 prevents database queries from freezing your bot if the cloud lags
         pool = await asyncpg.create_pool(DATABASE_URL, command_timeout=30)
         logger.info("Connected to Supabase PostgreSQL flawlessly.")
     except Exception as e:
         logger.error(f"FATAL DATABASE ERROR: Could not connect to Supabase: {e}")
         return
 
-    # 3. Boot the Bot
     async with pool:
         bot = CasinoForge(db_pool=pool, creator_id=CREATOR_ID)
         await bot.start(TOKEN)
