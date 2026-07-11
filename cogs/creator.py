@@ -8,12 +8,14 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import logging
+import sys
+import os
 
 logger = logging.getLogger('CasinoForge.Creator')
 
 def CreatorOnly():
     async def predicate(interaction: discord.Interaction) -> bool:
-        if interaction.user.id != interaction.client.creator_id:
+        if interaction.user.id not in interaction.client.creator_ids:
             await interaction.response.send_message(
                 "❌ This command is restricted to the bot creator.",
                 ephemeral=True
@@ -26,6 +28,20 @@ def CreatorOnly():
 class Creator(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+    @app_commands.command(name="maintenance", description="[Creator] Toggles global maintenance mode.")
+    @CreatorOnly()
+    async def maintenance(self, interaction: discord.Interaction):
+        """Toggle maintenance mode."""
+        self.bot.maintenance_mode = not self.bot.maintenance_mode
+        status = "ENABLED 🛠️" if self.bot.maintenance_mode else "DISABLED ✅"
+        
+        await interaction.response.send_message(
+            f"🚧 **Maintenance Mode** is now **{status}**.\n"
+            f"{'Regular users can no longer play casino games.' if self.bot.maintenance_mode else 'Regular users can now play games again.'}",
+            ephemeral=True
+        )
+        logger.info(f"Maintenance mode toggled to: {self.bot.maintenance_mode}")
 
     @app_commands.command(name="dev-reload", description="[Creator] Hot-reload a cog module.")
     @CreatorOnly()
@@ -57,6 +73,7 @@ class Creator(commands.Cog):
         embed.add_field(name="Bot ID", value=self.bot.user.id, inline=True)
         embed.add_field(name="Latency", value=f"{self.bot.latency * 1000:.2f}ms", inline=True)
         embed.add_field(name="Guilds", value=len(self.bot.guilds), inline=True)
+        embed.add_field(name="Maintenance", value="ON 🛠️" if self.bot.maintenance_mode else "OFF ✅", inline=True)
         
         await interaction.response.send_message(embed=embed)
 
@@ -87,6 +104,18 @@ class Creator(commands.Cog):
             )
             logger.error(f"Failed to sync commands: {e}")
 
+    @app_commands.command(name="dev-eval", description="[Creator] Evaluate Python code.")
+    @CreatorOnly()
+    @app_commands.describe(code="Python code to evaluate")
+    async def dev_eval(self, interaction: discord.Interaction, code: str):
+        """Developer: Eval code."""
+        await interaction.response.defer(ephemeral=True)
+        try:
+            result = eval(code)
+            await interaction.followup.send(f"✅ **Result:**\n```py\n{result}\n```")
+        except Exception as e:
+            await interaction.followup.send(f"❌ **Error:**\n```py\n{e}\n```")
+
     @app_commands.command(name="dev-echo", description="[Creator] Echo a message.")
     @CreatorOnly()
     @app_commands.describe(message="Message to echo")
@@ -106,7 +135,6 @@ class Creator(commands.Cog):
             ephemeral=True
         )
 
-    # let server owners pick where the spam goes
     @app_commands.command(
         name="global-announcement-setup", 
         description="[Admin] Set the channel where global announcements will be received."
@@ -116,7 +144,6 @@ class Creator(commands.Cog):
     async def global_announcement_setup(self, interaction: discord.Interaction, channel: discord.TextChannel):
         await interaction.response.defer(ephemeral=True)
         
-        # shove this channel id into the database
         async with self.bot.db_pool.acquire() as conn:
             await conn.execute(
                 """
@@ -134,7 +161,6 @@ class Creator(commands.Cog):
             ephemeral=True
         )
 
-    # absolute power command for me only
     @app_commands.command(
         name="global-say", 
         description="[Creator] Broadcast an announcement to all configured server channels."
@@ -142,7 +168,6 @@ class Creator(commands.Cog):
     @CreatorOnly()  
     @app_commands.describe(message="The message or announcement content to broadcast everywhere")
     async def global_say(self, interaction: discord.Interaction, message: str):
-        # defer right away so discord doesnt throw a tantrum while we loop
         await interaction.response.defer(ephemeral=True)
         
         async with self.bot.db_pool.acquire() as conn:
@@ -158,12 +183,10 @@ class Creator(commands.Cog):
         success_count = 0
         fail_count = 0
 
-        # blast the message to every server that set it up
         for row in rows:
             channel_id = int(row['announcement_channel_id'])
             channel = self.bot.get_channel(channel_id)
             
-            # look in the cache first, otherwise yell at discord's api
             if channel is None:
                 try:
                     channel = await self.bot.fetch_channel(channel_id)
@@ -175,13 +198,12 @@ class Creator(commands.Cog):
                 await channel.send(message)
                 success_count += 1
             except Exception:
-                # probably got kicked or channel got nuked, just skip it lol
                 fail_count += 1
 
         await interaction.followup.send(
             f"📢 **Global Announcement Dispatched!**\n"
             f"✅ Sent successfully to **{success_count}** channel(s).\n"
-            f"❌ Failed/Skipped **{fail_count}** channel(s) due to missing permissions.",
+            f"❌ Failed/Skipped **{fail_count}** channel(s).",
             ephemeral=True
         )
 

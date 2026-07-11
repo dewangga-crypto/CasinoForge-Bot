@@ -19,7 +19,7 @@ logging.basicConfig(
 logger = logging.getLogger('CasinoForge')
 
 class CasinoForge(commands.Bot):
-    def __init__(self, db_pool: asyncpg.Pool, creator_id: int):
+    def __init__(self, db_pool: asyncpg.Pool, creator_ids: list[int]):
         intents = discord.Intents.default()
         intents.message_content = True
         
@@ -30,7 +30,8 @@ class CasinoForge(commands.Bot):
         )
         
         self.db_pool = db_pool
-        self.creator_id = creator_id
+        self.creator_ids = creator_ids
+        self.maintenance_mode = False
 
     async def setup_hook(self):
         # Attach the error handler directly to the tree inside the setup hook safely
@@ -77,7 +78,7 @@ class CasinoForge(commands.Bot):
 async def main():
     TOKEN = os.getenv("BOT_TOKEN")
     DATABASE_URL = os.getenv("DATABASE_URL")
-    CREATOR_ID = 1075340640243691520
+    CREATOR_IDS = [1075340640243691520] # Add more IDs here
 
     if not TOKEN or not DATABASE_URL:
         logger.error("FATAL BOOT ERROR: BOT_TOKEN or DATABASE_URL missing from environment variables!")
@@ -92,7 +93,7 @@ async def main():
         return
 
     async with pool:
-        bot = CasinoForge(db_pool=pool, creator_id=CREATOR_ID)
+        bot = CasinoForge(db_pool=pool, creator_ids=CREATOR_IDS)
         await bot.start(TOKEN)
 
 if __name__ == "__main__":

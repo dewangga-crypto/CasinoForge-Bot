@@ -29,6 +29,14 @@ class Gambling(commands.Cog):
 
     async def process_bet(self, interaction: discord.Interaction, bet: int) -> bool:
         """Deducts the bet and checks for restrictions. Returns True if successful."""
+        # Maintenance Check
+        if self.bot.maintenance_mode and interaction.user.id not in self.bot.creator_ids:
+            await interaction.response.send_message(
+                "🛠️ **Bot is under maintenance.**\nRegular users cannot play casino games at this time. Please try again later!",
+                ephemeral=True
+            )
+            return False
+
         if bet <= 0:
             await interaction.response.send_message("❌ Bet amount must be positive.", ephemeral=True)
             return False
@@ -340,10 +348,13 @@ class Gambling(commands.Cog):
         else:
             logger.error(f"Command error: {error}")
             if not interaction.response.is_done():
-                await interaction.response.send_message(
-                    f"❌ An error occurred: {str(error)[:100]}",
-                    ephemeral=True
-                )
+                try:
+                    await interaction.response.send_message(
+                        f"❌ An error occurred: {str(error)[:100]}",
+                        ephemeral=True
+                    )
+                except:
+                    pass
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Gambling(bot))
