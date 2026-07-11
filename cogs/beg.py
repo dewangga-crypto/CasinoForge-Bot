@@ -16,8 +16,8 @@ class Beg(commands.Cog):
 
     @app_commands.command(name="beg", description="Beg for some spare change from the high rollers.")
     async def beg(self, interaction: discord.Interaction):
-        # 1. Roll the outcome (20% failure rate)
-        if random.random() < 0.20:
+        # was 20% chance now 45 bc its easy to earn
+        if random.random() < 0.45:
             rejections = [
                 "Get a job, bum!",
                 "I only give to charity, and you look like trouble.",
