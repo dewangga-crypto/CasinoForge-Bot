@@ -59,7 +59,7 @@ class GiveConfirmView(discord.ui.View):
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red, custom_id="give_cancel")
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
-        await interaction.followup.send("❌ Transfer cancelled.", ephemeral=True)
+        await interaction.followup.send("❌ Transfer cancelled.")
         self.stop()
 
 class RequestConfirmView(discord.ui.View):
@@ -119,9 +119,8 @@ class RequestConfirmView(discord.ui.View):
     async def decline(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
         await interaction.followup.send(
-            f"❌ {self.target_user.mention} declined your request.",
-            ephemeral=True
-        )
+            f"❌ {self.target_user.mention} declined your request."
+            )
         self.stop()
 
 class Action(commands.Cog):
