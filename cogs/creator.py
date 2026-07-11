@@ -11,9 +11,8 @@ import logging
 
 logger = logging.getLogger('CasinoForge.Creator')
 
-class CreatorOnly(app_commands.check):
-    """Check if user is the bot creator."""
-    async def __call__(self, interaction: discord.Interaction) -> bool:
+def CreatorOnly():
+    async def predicate(interaction: discord.Interaction) -> bool:
         if interaction.user.id != interaction.client.creator_id:
             await interaction.response.send_message(
                 "❌ This command is restricted to the bot creator.",
@@ -21,6 +20,8 @@ class CreatorOnly(app_commands.check):
             )
             return False
         return True
+    return app_commands.check(predicate)
+
 
 class Creator(commands.Cog):
     def __init__(self, bot: commands.Bot):
