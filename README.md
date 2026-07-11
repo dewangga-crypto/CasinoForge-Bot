@@ -28,3 +28,4 @@ CasinoForge/
     ├── staff.py          # Economy management & severe moderation
     ├── creator.py        # Developer commands (hyperjay_951)
     └── fun.py            # Non-economy chat utility commands
+    --- beg.py.           # Begging Command ig
