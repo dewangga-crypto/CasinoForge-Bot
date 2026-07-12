@@ -405,6 +405,7 @@ class Gambling(commands.Cog):
         
         await interaction.followup.send(msg)
 
+    
     @app_commands.command(name="jackpot", description="Buy jackpot tickets (500 coins each).")
     @app_commands.describe(amount="Number of tickets to buy")
     async def jackpot(self, interaction: discord.Interaction, amount: int):
@@ -418,42 +419,49 @@ class Gambling(commands.Cog):
         if not await self.process_bet(interaction, total_cost):
             return
         
-        # Defer immediately to give your database operations up to 15 minutes to finish
+        # Defer immediately to stop the 3-second timeout
         await interaction.response.defer()
         
-        async with self.bot.db_pool.acquire() as conn:
-            # Get or create active jackpot
-            jackpot = await conn.fetchrow("SELECT id, end_time FROM jackpot WHERE is_active = TRUE")
-            if not jackpot:
-                end_time = datetime.utcnow() + timedelta(days=3)
-                jackpot_id = await conn.fetchval(
-                    "INSERT INTO jackpot (end_time, total_prize) VALUES ($1, $2) RETURNING id",
-                    end_time, total_cost
+        try:
+            async with self.bot.db_pool.acquire() as conn:
+                # Get or create active jackpot
+                jackpot = await conn.fetchrow("SELECT id, end_time FROM jackpot WHERE is_active = TRUE")
+                if not jackpot:
+                    end_time = datetime.utcnow() + timedelta(days=3)
+                    jackpot_id = await conn.fetchval(
+                        "INSERT INTO jackpot (end_time, total_prize) VALUES ($1, $2) RETURNING id",
+                        end_time, total_cost
+                    )
+                    end_time_str = end_time.strftime("%Y-%m-%d %H:%M:%S UTC")
+                else:
+                    jackpot_id = jackpot['id']
+                    await conn.execute("UPDATE jackpot SET total_prize = total_prize + $1 WHERE id = $2", total_cost, jackpot_id)
+                    end_time_str = jackpot['end_time'].strftime("%Y-%m-%d %H:%M:%S UTC")
+                
+                # Add tickets
+                await conn.execute(
+                    """
+                    INSERT INTO jackpot_tickets (jackpot_id, user_id, ticket_count)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (jackpot_id, user_id) 
+                    DO UPDATE SET ticket_count = jackpot_tickets.ticket_count + $3
+                    """,
+                    jackpot_id, str(interaction.user.id), amount
                 )
-                end_time_str = end_time.strftime("%Y-%m-%d %H:%M:%S UTC")
-            else:
-                jackpot_id = jackpot['id']
-                await conn.execute("UPDATE jackpot SET total_prize = total_prize + $1 WHERE id = $2", total_cost, jackpot_id)
-                end_time_str = jackpot['end_time'].strftime("%Y-%m-%d %H:%M:%S UTC")
-            
-            # Add tickets
-            await conn.execute(
-                """
-                INSERT INTO jackpot_tickets (jackpot_id, user_id, ticket_count)
-                VALUES ($1, $2, $3)
-                ON CONFLICT (jackpot_id, user_id) 
-                DO UPDATE SET ticket_count = jackpot_tickets.ticket_count + $3
-                """,
-                jackpot_id, str(interaction.user.id), amount
+                
+            # If we made it here, the DB stuff worked!
+            await interaction.followup.send(
+                f"🎰 **Jackpot Tickets Purchased!**\n"
+                f"You bought **{amount}** tickets for **{total_cost:,}** coins.\n"
+                f"The jackpot ends on: **{end_time_str}**.\n"
+                f"Good luck! You'll be notified via DM when the winner is picked."
             )
-            
-        # Use interaction.followup.send instead since the interaction was deferred
-        await interaction.followup.send(
-            f"🎰 **Jackpot Tickets Purchased!**\n"
-            f"You bought **{amount}** tickets for **{total_cost:,}** coins.\n"
-            f"The jackpot ends on: **{end_time_str}**.\n"
-            f"Good luck! You'll be notified via DM when the winner is picked."
-        )
+
+        except Exception as e:
+            # Print the exact error to your console so you can see why it froze
+            print(f"[JACKPOT ERROR]: {e}")
+            # Tell the user something went wrong instead of leaving them hanging
+            await interaction.followup.send("❌ An error occurred while processing your database request. Please try again.")
 
 
     @app_commands.command(name="scratchcard", description="Buy a virtual scratchcard.")
