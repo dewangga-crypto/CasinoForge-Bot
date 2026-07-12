@@ -418,6 +418,9 @@ class Gambling(commands.Cog):
         if not await self.process_bet(interaction, total_cost):
             return
         
+        # Defer immediately to give your database operations up to 15 minutes to finish
+        await interaction.response.defer()
+        
         async with self.bot.db_pool.acquire() as conn:
             # Get or create active jackpot
             jackpot = await conn.fetchrow("SELECT id, end_time FROM jackpot WHERE is_active = TRUE")
@@ -444,12 +447,14 @@ class Gambling(commands.Cog):
                 jackpot_id, str(interaction.user.id), amount
             )
             
-        await interaction.response.send_message(
+        # Use interaction.followup.send instead since the interaction was deferred
+        await interaction.followup.send(
             f"🎰 **Jackpot Tickets Purchased!**\n"
             f"You bought **{amount}** tickets for **{total_cost:,}** coins.\n"
             f"The jackpot ends on: **{end_time_str}**.\n"
             f"Good luck! You'll be notified via DM when the winner is picked."
         )
+
 
     @app_commands.command(name="scratchcard", description="Buy a virtual scratchcard.")
     @app_commands.describe(bet="Cost of scratchcard (100, 500, 1000)")
