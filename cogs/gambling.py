@@ -427,7 +427,7 @@ class Gambling(commands.Cog):
                 # Get or create active jackpot
                 jackpot = await conn.fetchrow("SELECT id, end_time FROM jackpot WHERE is_active = TRUE")
                 if not jackpot:
-                    end_time = datetime.utcnow() + timedelta(days=3)
+                    from datetime import timezone, timedelta; end_time = datetime.now(timezone(timedelta(hours=8))) + timedelta(days=3)
                     jackpot_id = await conn.fetchval(
                         "INSERT INTO jackpot (end_time, total_prize) VALUES ($1, $2) RETURNING id",
                         end_time, total_cost
