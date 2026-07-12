@@ -79,6 +79,50 @@ class Staff(commands.Cog):
             f"✅ Removed **{amount:,}** coins from {user.mention}'s wallet."
         )
 
+    @app_commands.command(name="eco-set", description="[Admin] Set a user's wallet balance.")
+    @app_commands.describe(user="User to set balance for", amount="New balance amount")
+    @app_commands.default_permissions(administrator=True)
+    async def eco_set(self, interaction: discord.Interaction, user: discord.User, amount: int):
+        """Admin: Set user balance."""
+        if amount < 0:
+            return await interaction.response.send_message("❌ Amount cannot be negative.", ephemeral=True)
+        
+        await self.ensure_user(user.id)
+        async with self.bot.db_pool.acquire() as conn:
+            await conn.execute("UPDATE users SET wallet = $1 WHERE user_id = $2", amount, str(user.id))
+        
+        await interaction.response.send_message(f"✅ Set {user.mention}'s wallet to **{amount:,}** coins.")
+
+    @app_commands.command(name="eco-reset", description="[Admin] Reset a user's entire profile.")
+    @app_commands.describe(user="User to reset")
+    @app_commands.default_permissions(administrator=True)
+    async def eco_reset(self, interaction: discord.Interaction, user: discord.User):
+        """Admin: Reset user profile."""
+        await self.ensure_user(user.id)
+        async with self.bot.db_pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE users SET wallet = 0, bank = 0, bank_limit = 5000, is_frozen = FALSE, is_blacklisted = FALSE WHERE user_id = $1",
+                str(user.id)
+            )
+        await interaction.response.send_message(f"♻️ Reset all data for {user.mention}.")
+
+    @app_commands.command(name="staff-stats", description="[Admin] View global economy statistics.")
+    @app_commands.default_permissions(administrator=True)
+    async def staff_stats(self, interaction: discord.Interaction):
+        """Admin: Global stats."""
+        async with self.bot.db_pool.acquire() as conn:
+            total_wallet = await conn.fetchval("SELECT SUM(wallet) FROM users")
+            total_bank = await conn.fetchval("SELECT SUM(bank) FROM users")
+            total_users = await conn.fetchval("SELECT COUNT(*) FROM users")
+            frozen_users = await conn.fetchval("SELECT COUNT(*) FROM users WHERE is_frozen = TRUE")
+            
+        embed = discord.Embed(title="📊 Global Economy Stats", color=discord.Color.blue())
+        embed.add_field(name="Total Coins", value=f"**{(total_wallet or 0) + (total_bank or 0):,}**", inline=True)
+        embed.add_field(name="Total Users", value=f"**{total_users:,}**", inline=True)
+        embed.add_field(name="Frozen Accounts", value=f"**{frozen_users:,}**", inline=True)
+        
+        await interaction.response.send_message(embed=embed)
+
     @app_commands.command(name="eco-freeze", description="[Admin] Freeze a user's account (blocks transactions).")
     @app_commands.describe(user="User to freeze")
     @app_commands.default_permissions(administrator=True)

@@ -4,12 +4,13 @@ CasinoForge - Core Engine
 """
 
 import discord
-from discord import app_commands  # 👈 Added this missing import!
-from discord.ext import commands
+from discord import app_commands
+from discord.ext import commands, tasks
 import asyncpg
 import os
 import asyncio
 import logging
+from datetime import datetime, timedelta
 
 # 1. Advanced Logging Setup
 logging.basicConfig(
@@ -22,6 +23,7 @@ class CasinoForge(commands.Bot):
     def __init__(self, db_pool: asyncpg.Pool, creator_ids: list[int]):
         intents = discord.Intents.default()
         intents.message_content = True
+        intents.members = True # Needed for DMs and member list
         
         super().__init__(
             command_prefix="!", 
@@ -44,17 +46,90 @@ class CasinoForge(commands.Bot):
                 await self.load_extension(cog)
                 logger.info(f"Successfully loaded module: {cog}")
             except Exception as e:
-                logger.warning(f"Skipped loading {cog} (File not built yet): {e}")
+                logger.warning(f"Skipped loading {cog}: {e}")
 
-        logger.info("Syncing slash commands globally... (This takes a moment)")
+        logger.info("Syncing slash commands globally...")
         await self.tree.sync()
         logger.info("Global slash commands synced successfully!")
+        
+        # Start background tasks
+        self.jackpot_checker.start()
 
     async def on_ready(self):
         logger.info(f"Bot Online! Logged in as {self.user.name} (ID: {self.user.id})")
         await self.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="High Stakes | /help"))
 
-    # 👈 This is the clean, built-in way to catch cooldown spam perfectly!
+    @tasks.loop(minutes=5)
+    async def jackpot_checker(self):
+        """Check for expired jackpots and pick a winner."""
+        async with self.db_pool.acquire() as conn:
+            # Find active jackpots that have ended
+            ended_jackpots = await conn.fetch(
+                "SELECT id, total_prize FROM jackpot WHERE is_active = TRUE AND end_time <= $1",
+                datetime.utcnow()
+            )
+            
+            for jackpot in ended_jackpots:
+                jackpot_id = jackpot['id']
+                total_prize = jackpot['total_prize']
+                
+                # Get all participants and their tickets
+                tickets = await conn.fetch(
+                    "SELECT user_id, ticket_count FROM jackpot_tickets WHERE jackpot_id = $1",
+                    jackpot_id
+                )
+                
+                if not tickets:
+                    await conn.execute("UPDATE jackpot SET is_active = FALSE WHERE id = $1", jackpot_id)
+                    continue
+                
+                # Pick a winner
+                import random
+                weighted_users = []
+                for t in tickets:
+                    weighted_users.extend([t['user_id']] * t['ticket_count'])
+                
+                winner_id = random.choice(weighted_users)
+                
+                # Update database
+                async with conn.transaction():
+                    await conn.execute(
+                        "UPDATE users SET wallet = wallet + $1 WHERE user_id = $2",
+                        total_prize, winner_id
+                    )
+                    await conn.execute(
+                        "UPDATE jackpot SET is_active = FALSE WHERE id = $1",
+                        jackpot_id
+                    )
+                
+                # Notify participants
+                winner_user = await self.fetch_user(int(winner_id))
+                winner_name = winner_user.display_name if winner_user else "Unknown"
+                
+                for t in tickets:
+                    try:
+                        user = await self.fetch_user(int(t['user_id']))
+                        if user:
+                            if t['user_id'] == winner_id:
+                                await user.send(
+                                    f"🎉 **JACKPOT WINNER!** 🎉\n"
+                                    f"Congratulations! You won the jackpot prize of **{total_prize:,}** coins!"
+                                )
+                            else:
+                                await user.send(
+                                    f"🎰 **Jackpot Results** 🎰\n"
+                                    f"The jackpot has ended. Unfortunately, you didn't win this time.\n"
+                                    f"Winner: **{winner_name}**\n"
+                                    f"Total Prize: **{total_prize:,}** coins.\n"
+                                    f"Better luck next time!"
+                                )
+                    except Exception as e:
+                        logger.warning(f"Could not send DM to user {t['user_id']}: {e}")
+
+    @jackpot_checker.before_loop
+    async def before_jackpot_checker(self):
+        await self.wait_until_ready()
+
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CommandOnCooldown):
             seconds = error.retry_after
@@ -74,22 +149,21 @@ class CasinoForge(commands.Bot):
 
         logger.error(f"Unhandled slash command error: {error}")
 
-
 async def main():
     TOKEN = os.getenv("BOT_TOKEN")
     DATABASE_URL = os.getenv("DATABASE_URL")
-    CREATOR_IDS = [1075340640243691520, 1307955870713380884] # Add more IDs here
+    CREATOR_IDS = [1075340640243691520] # Add more IDs here
 
     if not TOKEN or not DATABASE_URL:
         logger.error("FATAL BOOT ERROR: BOT_TOKEN or DATABASE_URL missing from environment variables!")
         return
 
-    logger.info("Initializing Supabase database connection pool...")
+    logger.info("Initializing database connection pool...")
     try:
         pool = await asyncpg.create_pool(DATABASE_URL, command_timeout=30)
-        logger.info("Connected to Supabase PostgreSQL flawlessly.")
+        logger.info("Connected to PostgreSQL flawlessly.")
     except Exception as e:
-        logger.error(f"FATAL DATABASE ERROR: Could not connect to Supabase: {e}")
+        logger.error(f"FATAL DATABASE ERROR: Could not connect to Database: {e}")
         return
 
     async with pool:
@@ -100,4 +174,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Bot manually shut down by the developer.")
+        logger.info("Bot manually shut down.")

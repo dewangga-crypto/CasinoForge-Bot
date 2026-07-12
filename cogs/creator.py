@@ -24,12 +24,11 @@ def CreatorOnly():
         return True
     return app_commands.check(predicate)
 
-
 class Creator(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="dev-maintenance", description="[Creator] Toggles global maintenance mode.")
+    @app_commands.command(name="maintenance", description="[Creator] Toggles global maintenance mode.")
     @CreatorOnly()
     async def maintenance(self, interaction: discord.Interaction):
         """Toggle maintenance mode."""
@@ -42,6 +41,30 @@ class Creator(commands.Cog):
             ephemeral=True
         )
         logger.info(f"Maintenance mode toggled to: {self.bot.maintenance_mode}")
+
+    @app_commands.command(name="dev-logs", description="[Creator] Fetch the latest bot logs.")
+    @CreatorOnly()
+    async def dev_logs(self, interaction: discord.Interaction):
+        """Fetch logs."""
+        try:
+            with open("bot.log", "r") as f:
+                logs = f.readlines()[-20:]
+            log_text = "".join(logs)
+            await interaction.response.send_message(f"📜 **Latest Logs:**\n```\n{log_text}\n```", ephemeral=True)
+        except:
+            await interaction.response.send_message("❌ Could not read log file.", ephemeral=True)
+
+    @app_commands.command(name="dev-leave", description="[Creator] Force the bot to leave a guild.")
+    @CreatorOnly()
+    @app_commands.describe(guild_id="ID of the guild to leave")
+    async def dev_leave(self, interaction: discord.Interaction, guild_id: str):
+        """Force leave guild."""
+        guild = self.bot.get_guild(int(guild_id))
+        if guild:
+            await guild.leave()
+            await interaction.response.send_message(f"👋 Left guild: **{guild.name}**", ephemeral=True)
+        else:
+            await interaction.response.send_message("❌ Guild not found.", ephemeral=True)
 
     @app_commands.command(name="dev-reload", description="[Creator] Hot-reload a cog module.")
     @CreatorOnly()
@@ -130,10 +153,9 @@ class Creator(commands.Cog):
                         await interaction.followup.send("✅ Query executed successfully. No results returned.")
                         return
                     
-                    # Format as table-like output
                     header = " | ".join(rows[0].keys())
                     lines = [header, "-" * len(header)]
-                    for row in rows[:10]: # Limit to 10 rows for Discord
+                    for row in rows[:10]:
                         lines.append(" | ".join(str(v) for v in row.values()))
                     
                     result_text = "\n".join(lines)
@@ -164,27 +186,8 @@ class Creator(commands.Cog):
             
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(name="dev-echo", description="[Creator] Echo a message.")
-    @CreatorOnly()
-    @app_commands.describe(message="Message to echo")
-    async def dev_echo(self, interaction: discord.Interaction, message: str):
-        """Developer: Echo test command."""
-        await interaction.response.send_message(
-            f"🔊 Echo: {message}",
-            ephemeral=True
-        )
-
-    @app_commands.command(name="dev-ping", description="[Creator] Ping the bot.")
-    @CreatorOnly()
-    async def dev_ping(self, interaction: discord.Interaction):
-        """Developer: Ping test."""
-        await interaction.response.send_message(
-            f"🏓 Pong! Latency: {self.bot.latency * 1000:.2f}ms",
-            ephemeral=True
-        )
-
     @app_commands.command(
-        name="glbl-announce-setup", 
+        name="global-announcement-setup", 
         description="[Admin] Set the channel where global announcements will be received."
     )
     @app_commands.checks.has_permissions(manage_channels=True)
@@ -254,7 +257,6 @@ class Creator(commands.Cog):
             f"❌ Failed/Skipped **{fail_count}** channel(s).",
             ephemeral=True
         )
-
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Creator(bot))

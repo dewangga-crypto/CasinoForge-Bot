@@ -27,35 +27,70 @@ class Fun(commands.Cog):
         
         embed.add_field(
             name="🎲 **Gambling Games**",
-            value="`/coinflip` `/slots` `/blackjack` `/roulette` `/crash` `/horserace` `/dice` `/lottery` `/gamble`",
+            value="`/coinflip` `/slots` `/blackjack` `/roulette` `/crash` `/horserace` `/dice` `/lottery` `/gamble` `/scratchcard` `/highlow` `/mines` `/jackpot`",
             inline=False
         )
         
         embed.add_field(
             name="💰 **Economy**",
-            value="`/balance` `/deposit` `/withdraw` `/work` `/give` `/request`",
+            value="`/balance` `/deposit` `/withdraw` `/work` `/daily` `/payday` `/give` `/request` `/leaderboard` `/leaderboard-global`",
             inline=False
         )
         
         embed.add_field(
-            name="🛡️ **Admin Commands** (requires admin)",
-            value="`/eco-add` `/eco-remove` `/eco-freeze` `/eco-unfreeze` `/eco-wipe` `/eco-search` `/bank-limit` `/blacklist` `/unblacklist`",
+            name="🛡️ **Admin Commands**",
+            value="`/eco-add` `/eco-remove` `/eco-set` `/eco-reset` `/eco-freeze` `/eco-unfreeze` `/eco-wipe` `/eco-search` `/bank-limit` `/blacklist` `/unblacklist` `/staff-stats`",
             inline=False
         )
         
         embed.add_field(
-            name="👨‍💻 **Developer Commands** (creator only)",
-            value="`/maintenance` `/dev-reload` `/dev-status` `/dev-eval` `/dev-sql` `/dev-guilds` `/dev-sync` `/global-say` `/dev-shutdown`",
+            name="👨‍💻 **Developer Commands**",
+            value="`/maintenance` `/dev-reload` `/dev-status` `/dev-eval` `/dev-sql` `/dev-guilds` `/dev-sync` `/global-say` `/dev-logs` `/dev-leave` `/dev-shutdown`",
             inline=False
         )
         
         embed.add_field(
             name="🎉 **Fun**",
-            value="`/quote` `/roll` `/flip`",
+            value="`/quote` `/roll` `/flip` `/8ball` `/choose` `/rps` `/slots-free` `/coinflip-free`",
             inline=False
         )
         
         await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="rps", description="Play Rock-Paper-Scissors.")
+    @app_commands.describe(choice="Rock, Paper, or Scissors")
+    @app_commands.choices(choice=[
+        app_commands.Choice(name="Rock", value="rock"),
+        app_commands.Choice(name="Paper", value="paper"),
+        app_commands.Choice(name="Scissors", value="scissors")
+    ])
+    async def rps(self, interaction: discord.Interaction, choice: app_commands.Choice[str]):
+        """Play RPS."""
+        bot_choice = random.choice(["rock", "paper", "scissors"])
+        
+        if choice.value == bot_choice:
+            res = "It's a tie!"
+        elif (choice.value == "rock" and bot_choice == "scissors") or \
+             (choice.value == "paper" and bot_choice == "rock") or \
+             (choice.value == "scissors" and bot_choice == "paper"):
+            res = "You win! 🎉"
+        else:
+            res = "You lose! ❌"
+            
+        await interaction.response.send_message(f"🤜 You chose **{choice.name}**, I chose **{bot_choice.capitalize()}**. {res}")
+
+    @app_commands.command(name="slots-free", description="Play slots for free (no stakes).")
+    async def slots_free(self, interaction: discord.Interaction):
+        """Free slots."""
+        symbols = ["🍎", "🍊", "🍋", "🍌", "🍇", "⭐"]
+        s1, s2, s3 = random.choices(symbols, k=3)
+        await interaction.response.send_message(f"🎰 **{s1} | {s2} | {s3}**\n(Free play - no coins awarded)")
+
+    @app_commands.command(name="coinflip-free", description="Flip a coin for free.")
+    async def coinflip_free(self, interaction: discord.Interaction):
+        """Free coinflip."""
+        res = random.choice(["Heads", "Tails"])
+        await interaction.response.send_message(f"🪙 The coin landed on **{res}**!")
 
     @app_commands.command(name="quote", description="Get an inspiring quote.")
     async def quote(self, interaction: discord.Interaction):
@@ -98,16 +133,8 @@ class Fun(commands.Cog):
     async def eightball(self, interaction: discord.Interaction, question: str):
         """Magic 8-ball response."""
         responses = [
-            "Yes, definitely.",
-            "No way.",
-            "Maybe...",
-            "Ask again later.",
-            "It is certain.",
-            "Don't count on it.",
-            "Very doubtful.",
-            "Outlook good.",
-            "Signs point to yes.",
-            "Without a doubt."
+            "Yes, definitely.", "No way.", "Maybe...", "Ask again later.", "It is certain.",
+            "Don't count on it.", "Very doubtful.", "Outlook good.", "Signs point to yes.", "Without a doubt."
         ]
         
         response = random.choice(responses)

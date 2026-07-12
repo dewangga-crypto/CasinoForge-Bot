@@ -1,0 +1,62 @@
+import asyncio
+import asyncpg
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+async def init():
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    if not DATABASE_URL:
+        print("DATABASE_URL not found in environment.")
+        return
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    
+    # Users table might already exist, but let's ensure all columns are there
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            user_id TEXT PRIMARY KEY,
+            wallet BIGINT DEFAULT 0,
+            bank BIGINT DEFAULT 0,
+            bank_limit BIGINT DEFAULT 5000,
+            is_frozen BOOLEAN DEFAULT FALSE,
+            is_blacklisted BOOLEAN DEFAULT FALSE,
+            last_daily TIMESTAMP,
+            last_work TIMESTAMP
+        );
+    """)
+
+    # Jackpot system tables
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS jackpot (
+            id SERIAL PRIMARY KEY,
+            end_time TIMESTAMP NOT NULL,
+            total_prize BIGINT DEFAULT 0,
+            is_active BOOLEAN DEFAULT TRUE
+        );
+    """)
+
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS jackpot_tickets (
+            id SERIAL PRIMARY KEY,
+            jackpot_id INTEGER REFERENCES jackpot(id),
+            user_id TEXT REFERENCES users(user_id),
+            ticket_count INTEGER DEFAULT 0,
+            UNIQUE(jackpot_id, user_id)
+        );
+    """)
+
+    # Server settings for announcements
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS server_settings (
+            guild_id TEXT PRIMARY KEY,
+            announcement_channel_id TEXT
+        );
+    """)
+
+    print("Database initialized successfully.")
+    await conn.close()
+
+if __name__ == "__main__":
+    asyncio.run(init())

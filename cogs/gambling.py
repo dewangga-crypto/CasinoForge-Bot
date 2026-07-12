@@ -14,10 +14,105 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger('CasinoForge.Gambling')
 
+class BlackjackView(discord.ui.View):
+    def __init__(self, cog, interaction, bet):
+        super().__init__(timeout=60.0)
+        self.cog = cog
+        self.interaction = interaction
+        self.bet = bet
+        self.deck = [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 11] * 4
+        random.shuffle(self.deck)
+        self.player_hand = [self.draw_card(), self.draw_card()]
+        self.dealer_hand = [self.draw_card(), self.draw_card()]
+        self.game_over = False
+
+    def draw_card(self):
+        return self.deck.pop()
+
+    def get_score(self, hand):
+        score = sum(hand)
+        aces = hand.count(11)
+        while score > 21 and aces:
+            score -= 10
+            aces -= 1
+        return score
+
+    def create_embed(self, finished=False):
+        player_score = self.get_score(self.player_hand)
+        dealer_score = self.get_score(self.dealer_hand)
+        
+        embed = discord.Embed(
+            title="🃏 Blackjack",
+            color=discord.Color.blue() if not finished else (discord.Color.green() if player_score <= 21 and (player_score > dealer_score or dealer_score > 21) else discord.Color.red())
+        )
+        
+        dealer_display = f"{self.dealer_hand[0]} + ?" if not finished else f"{', '.join(map(str, self.dealer_hand))} ({dealer_score})"
+        embed.add_field(name="Dealer's Hand", value=dealer_display, inline=False)
+        embed.add_field(name="Your Hand", value=f"{', '.join(map(str, self.player_hand))} ({player_score})", inline=False)
+        embed.set_footer(text=f"Bet: {self.bet:,} coins")
+        
+        return embed
+
+    @discord.ui.button(label="Hit", style=discord.ButtonStyle.grey)
+    async def hit(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.interaction.user.id:
+            return await interaction.response.send_message("This is not your game!", ephemeral=True)
+        
+        self.player_hand.append(self.draw_card())
+        if self.get_score(self.player_hand) > 21:
+            await self.end_game(interaction, "bust")
+        else:
+            await interaction.response.edit_message(embed=self.create_embed(), view=self)
+
+    @discord.ui.button(label="Stand", style=discord.ButtonStyle.grey)
+    async def stand(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.interaction.user.id:
+            return await interaction.response.send_message("This is not your game!", ephemeral=True)
+        
+        while self.get_score(self.dealer_hand) < 17:
+            self.dealer_hand.append(self.draw_card())
+        
+        player_score = self.get_score(self.player_hand)
+        dealer_score = self.get_score(self.dealer_hand)
+        
+        if dealer_score > 21:
+            await self.end_game(interaction, "dealer_bust")
+        elif player_score > dealer_score:
+            await self.end_game(interaction, "win")
+        elif player_score < dealer_score:
+            await self.end_game(interaction, "loss")
+        else:
+            await self.end_game(interaction, "push")
+
+    async def end_game(self, interaction, result):
+        self.game_over = True
+        self.clear_items()
+        
+        player_score = self.get_score(self.player_hand)
+        dealer_score = self.get_score(self.dealer_hand)
+        
+        if result == "bust":
+            msg = f"💥 **BUST!** You went over 21. Lost **{self.bet:,}** coins."
+        elif result == "dealer_bust":
+            winnings = self.bet * 2
+            await self.cog.payout(self.interaction.user.id, winnings)
+            msg = f"🃏 Dealer busted at {dealer_score}! You win **{winnings:,}** coins!"
+        elif result == "win":
+            winnings = self.bet * 2
+            await self.cog.payout(self.interaction.user.id, winnings)
+            msg = f"🎉 You win! **{winnings:,}** coins!"
+        elif result == "loss":
+            msg = f"❌ Dealer wins. Lost **{self.bet:,}** coins."
+        else:
+            await self.cog.payout(self.interaction.user.id, self.bet)
+            msg = f"🤝 Push! Your bet of **{self.bet:,}** was returned."
+
+        await interaction.response.edit_message(content=msg, embed=self.create_embed(finished=True), view=None)
+        self.stop()
+
 class Gambling(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.betting_cooldowns = {}  # Track recent bets
 
     async def ensure_user(self, user_id: int):
         """Ensure user exists in database with default values."""
@@ -141,41 +236,15 @@ class Gambling(commands.Cog):
         
         await interaction.followup.send(msg)
 
-    @app_commands.command(name="blackjack", description="Play blackjack against the dealer.")
+    @app_commands.command(name="blackjack", description="Play blackjack against the dealer (OwO style).")
     @app_commands.describe(bet="Amount to bet")
     async def blackjack(self, interaction: discord.Interaction, bet: int):
-        """Simple blackjack game."""
+        """Interactive blackjack game."""
         if not await self.process_bet(interaction, bet):
             return
         
-        await interaction.response.defer()
-        await asyncio.sleep(1)
-        
-        # Simplified blackjack
-        player_cards = [random.randint(1, 11), random.randint(1, 11)]
-        dealer_cards = [random.randint(1, 11), random.randint(1, 11)]
-        
-        player_total = sum(player_cards)
-        dealer_total = sum(dealer_cards)
-        
-        if player_total > 21:
-            msg = f"🃏 Your hand: {player_total}\n💥 **BUST!** You went over 21. Lost **{bet:,}** coins."
-        elif dealer_total > 21:
-            winnings = bet * 2
-            msg = f"🃏 Your hand: {player_total}\n🃏 Dealer busted at {dealer_total}! You win **{winnings:,}** coins!"
-            await self.payout(interaction.user.id, winnings)
-        elif player_total > dealer_total:
-            winnings = bet * 2
-            msg = f"🃏 Your hand: {player_total}\n🃏 Dealer: {dealer_total}\n🎉 You win **{winnings:,}** coins!"
-            await self.payout(interaction.user.id, winnings)
-        elif player_total == dealer_total:
-            winnings = bet
-            msg = f"🃏 Your hand: {player_total}\n🃏 Dealer: {dealer_total}\n🤝 Push! Your bet returned: **{winnings:,}** coins."
-            await self.payout(interaction.user.id, winnings)
-        else:
-            msg = f"🃏 Your hand: {player_total}\n🃏 Dealer: {dealer_total}\n❌ Dealer wins. Lost **{bet:,}** coins."
-        
-        await interaction.followup.send(msg)
+        view = BlackjackView(self, interaction, bet)
+        await interaction.response.send_message(embed=view.create_embed(), view=view)
 
     @app_commands.command(name="roulette", description="Spin the roulette wheel.")
     @app_commands.describe(bet="Amount to bet", color="Red or Black")
@@ -335,6 +404,205 @@ class Gambling(commands.Cog):
             msg = f"💀 **ALL-IN GAMBLE LOSS!** You lost your **{bet:,}** coins betting it all! 😭"
         
         await interaction.followup.send(msg)
+
+    @app_commands.command(name="jackpot", description="Buy jackpot tickets (500 coins each).")
+    @app_commands.describe(amount="Number of tickets to buy")
+    async def jackpot(self, interaction: discord.Interaction, amount: int):
+        """Buy jackpot tickets."""
+        ticket_cost = 500
+        total_cost = amount * ticket_cost
+        
+        if amount <= 0:
+            return await interaction.response.send_message("❌ You must buy at least 1 ticket.", ephemeral=True)
+            
+        if not await self.process_bet(interaction, total_cost):
+            return
+        
+        async with self.bot.db_pool.acquire() as conn:
+            # Get or create active jackpot
+            jackpot = await conn.fetchrow("SELECT id, end_time FROM jackpot WHERE is_active = TRUE")
+            if not jackpot:
+                end_time = datetime.utcnow() + timedelta(days=3)
+                jackpot_id = await conn.fetchval(
+                    "INSERT INTO jackpot (end_time, total_prize) VALUES ($1, $2) RETURNING id",
+                    end_time, total_cost
+                )
+                end_time_str = end_time.strftime("%Y-%m-%d %H:%M:%S UTC")
+            else:
+                jackpot_id = jackpot['id']
+                await conn.execute("UPDATE jackpot SET total_prize = total_prize + $1 WHERE id = $2", total_cost, jackpot_id)
+                end_time_str = jackpot['end_time'].strftime("%Y-%m-%d %H:%M:%S UTC")
+            
+            # Add tickets
+            await conn.execute(
+                """
+                INSERT INTO jackpot_tickets (jackpot_id, user_id, ticket_count)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (jackpot_id, user_id) 
+                DO UPDATE SET ticket_count = jackpot_tickets.ticket_count + $3
+                """,
+                jackpot_id, str(interaction.user.id), amount
+            )
+            
+        await interaction.response.send_message(
+            f"🎰 **Jackpot Tickets Purchased!**\n"
+            f"You bought **{amount}** tickets for **{total_cost:,}** coins.\n"
+            f"The jackpot ends on: **{end_time_str}**.\n"
+            f"Good luck! You'll be notified via DM when the winner is picked."
+        )
+
+    @app_commands.command(name="scratchcard", description="Buy a virtual scratchcard.")
+    @app_commands.describe(bet="Cost of scratchcard (100, 500, 1000)")
+    @app_commands.choices(bet=[
+        app_commands.Choice(name="100", value=100),
+        app_commands.Choice(name="500", value=500),
+        app_commands.Choice(name="1000", value=1000)
+    ])
+    async def scratchcard(self, interaction: discord.Interaction, bet: app_commands.Choice[int]):
+        """Scratchcard game."""
+        if not await self.process_bet(interaction, bet.value):
+            return
+        
+        await interaction.response.defer()
+        await asyncio.sleep(1)
+        
+        res = random.random()
+        if res < 0.05: # 5% chance for 10x
+            winnings = bet.value * 10
+            msg = f"🎫 **SCRATCH!** You found a **MEGA WIN!** You won **{winnings:,}** coins! 🤑"
+            await self.payout(interaction.user.id, winnings)
+        elif res < 0.15: # 10% chance for 3x
+            winnings = bet.value * 3
+            msg = f"🎫 **SCRATCH!** You found a **WIN!** You won **{winnings:,}** coins! 🎉"
+            await self.payout(interaction.user.id, winnings)
+        elif res < 0.40: # 25% chance for 1.5x
+            winnings = int(bet.value * 1.5)
+            msg = f"🎫 **SCRATCH!** Small win! You won **{winnings:,}** coins! ✨"
+            await self.payout(interaction.user.id, winnings)
+        else:
+            msg = "🎫 **SCRATCH!** Nothing found. Better luck next time! ❌"
+        
+        await interaction.followup.send(msg)
+
+    @app_commands.command(name="highlow", description="Guess if the next card is higher or lower.")
+    @app_commands.describe(bet="Amount to bet")
+    async def highlow(self, interaction: discord.Interaction, bet: int):
+        """High-Low card game."""
+        if not await self.process_bet(interaction, bet):
+            return
+        
+        card1 = random.randint(1, 13)
+        
+        class HighLowView(discord.ui.View):
+            def __init__(self, cog, interaction, bet, card1):
+                super().__init__(timeout=30.0)
+                self.cog = cog
+                self.interaction = interaction
+                self.bet = bet
+                self.card1 = card1
+
+            @discord.ui.button(label="Higher", style=discord.ButtonStyle.green)
+            async def higher(self, interaction: discord.Interaction, button: discord.ui.Button):
+                await self.process_choice(interaction, "higher")
+
+            @discord.ui.button(label="Lower", style=discord.ButtonStyle.red)
+            async def lower(self, interaction: discord.Interaction, button: discord.ui.Button):
+                await self.process_choice(interaction, "lower")
+
+            async def process_choice(self, interaction, choice):
+                if interaction.user.id != self.interaction.user.id:
+                    return await interaction.response.send_message("Not your game!", ephemeral=True)
+                
+                card2 = random.randint(1, 13)
+                win = False
+                if choice == "higher" and card2 > self.card1: win = True
+                elif choice == "lower" and card2 < self.card1: win = True
+                
+                if win:
+                    winnings = int(self.bet * 1.8)
+                    await self.cog.payout(self.interaction.user.id, winnings)
+                    msg = f"🃏 Card was **{card2}**. You were right! Won **{winnings:,}** coins! 🎉"
+                else:
+                    msg = f"🃏 Card was **{card2}**. You were wrong. Lost **{self.bet:,}** coins. ❌"
+                
+                await interaction.response.edit_message(content=msg, view=None)
+                self.stop()
+
+        await interaction.response.send_message(f"🃏 Current card is **{card1}**. Will the next card be higher or lower?", view=HighLowView(self, interaction, bet, card1))
+
+    @app_commands.command(name="mines", description="Gambling Minesweeper.")
+    @app_commands.describe(bet="Amount to bet", mines="Number of mines (1-20)")
+    async def mines(self, interaction: discord.Interaction, bet: int, mines: int):
+        """Mines gambling game."""
+        if mines < 1 or mines > 20:
+            return await interaction.response.send_message("Mines must be between 1 and 20.", ephemeral=True)
+        
+        if not await self.process_bet(interaction, bet):
+            return
+
+        class MinesView(discord.ui.View):
+            def __init__(self, cog, interaction, bet, mine_count):
+                super().__init__(timeout=60.0)
+                self.cog = cog
+                self.interaction = interaction
+                self.bet = bet
+                self.mine_count = mine_count
+                self.grid = ["💎"] * 25
+                mine_indices = random.sample(range(25), mine_count)
+                for idx in mine_indices: self.grid[idx] = "💣"
+                self.revealed = [False] * 25
+                self.current_winnings = bet
+                self.safe_picks = 0
+                
+                for i in range(25):
+                    self.add_item(MinesButton(i))
+
+            async def pick(self, interaction, index):
+                if interaction.user.id != self.interaction.user.id:
+                    return await interaction.response.send_message("Not your game!", ephemeral=True)
+                
+                if self.grid[index] == "💣":
+                    self.clear_items()
+                    await interaction.response.edit_message(content=f"💥 **BOOM!** You hit a mine. Lost **{self.bet:,}** coins.", view=self)
+                    self.stop()
+                else:
+                    self.revealed[index] = True
+                    self.safe_picks += 1
+                    multiplier = 1 + (self.mine_count / (25 - self.safe_picks))
+                    self.current_winnings = int(self.current_winnings * multiplier)
+                    
+                    # Update buttons
+                    for item in self.children:
+                        if isinstance(item, MinesButton) and item.index == index:
+                            item.label = "💎"
+                            item.style = discord.ButtonStyle.green
+                            item.disabled = True
+                    
+                    if not any(isinstance(i, CashoutButton) for i in self.children):
+                        self.add_item(CashoutButton())
+                    
+                    await interaction.response.edit_message(content=f"💎 Safe! Current payout: **{self.current_winnings:,}**", view=self)
+
+            async def cashout(self, interaction):
+                await self.cog.payout(self.interaction.user.id, self.current_winnings)
+                self.clear_items()
+                await interaction.response.edit_message(content=f"💰 Cashed out! You won **{self.current_winnings:,}** coins!", view=self)
+                self.stop()
+
+        class MinesButton(discord.ui.Button):
+            def __init__(self, index):
+                super().__init__(label="?", style=discord.ButtonStyle.grey, row=index // 5)
+                self.index = index
+            async def callback(self, interaction):
+                await self.view.pick(interaction, self.index)
+
+        class CashoutButton(discord.ui.Button):
+            def __init__(self):
+                super().__init__(label="Cashout", style=discord.ButtonStyle.blurple, row=4)
+            async def callback(self, interaction):
+                await self.view.cashout(interaction)
+
+        await interaction.response.send_message(f"💣 **Mines Game Started!** Pick a tile. Mines: {mines}", view=MinesView(self, interaction, bet, mines))
 
     @commands.Cog.listener()
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):

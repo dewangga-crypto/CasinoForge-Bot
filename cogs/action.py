@@ -9,6 +9,7 @@ from discord import app_commands
 from discord.ext import commands
 import random
 import logging
+from datetime import datetime, timedelta
 
 logger = logging.getLogger('CasinoForge.Action')
 
@@ -78,7 +79,6 @@ class RequestConfirmView(discord.ui.View):
             )
             return False 
         return True 
-
 
     @discord.ui.button(label="Accept Request", style=discord.ButtonStyle.green, custom_id="req_accept")
     async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -260,14 +260,84 @@ class Action(commands.Cog):
         
         async with self.bot.db_pool.acquire() as conn:
             await conn.execute(
-                "UPDATE users SET wallet = wallet + $1 WHERE user_id = $2",
-                earnings,
-                str(interaction.user.id)
+                "UPDATE users SET wallet = wallet + $1, last_work = $2 WHERE user_id = $3",
+                earnings, datetime.utcnow(), str(interaction.user.id)
             )
         
         await interaction.response.send_message(
             f"💼 You worked hard and earned **{earnings:,}** coins!"
         )
+
+    @app_commands.command(name="daily", description="Claim your daily reward.")
+    @app_commands.checks.cooldown(1, 86400, key=lambda i: i.user.id)
+    async def daily(self, interaction: discord.Interaction):
+        """Claim daily coins."""
+        await self.ensure_user(interaction.user.id)
+        reward = 1000
+        
+        async with self.bot.db_pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE users SET wallet = wallet + $1, last_daily = $2 WHERE user_id = $3",
+                reward, datetime.utcnow(), str(interaction.user.id)
+            )
+        
+        await interaction.response.send_message(f"🎁 You claimed your daily reward of **{reward:,}** coins!")
+
+    @app_commands.command(name="payday", description="Get a small payday reward.")
+    @app_commands.checks.cooldown(1, 600, key=lambda i: i.user.id)
+    async def payday(self, interaction: discord.Interaction):
+        """Small passive income."""
+        await self.ensure_user(interaction.user.id)
+        reward = random.randint(50, 150)
+        
+        async with self.bot.db_pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE users SET wallet = wallet + $1 WHERE user_id = $2",
+                reward, str(interaction.user.id)
+            )
+        
+        await interaction.response.send_message(f"💸 It's payday! You got **{reward:,}** coins.")
+
+    @app_commands.command(name="leaderboard", description="Show the top richest users in this server.")
+    async def leaderboard(self, interaction: discord.Interaction):
+        """Server leaderboard."""
+        async with self.bot.db_pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT user_id, (wallet + bank) as total FROM users ORDER BY total DESC LIMIT 10"
+            )
+        
+        embed = discord.Embed(title="🏆 Server Leaderboard", color=discord.Color.gold())
+        
+        description = ""
+        for i, row in enumerate(rows, 1):
+            user = self.bot.get_user(int(row['user_id']))
+            name = user.display_name if user else f"User {row['user_id']}"
+            description += f"**{i}.** {name} — **{row['total']:,}** coins\n"
+        
+        embed.description = description if description else "No data found."
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="leaderboard-global", description="Show the top richest users globally.")
+    async def leaderboard_global(self, interaction: discord.Interaction):
+        """Global leaderboard."""
+        async with self.bot.db_pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT user_id, (wallet + bank) as total FROM users ORDER BY total DESC LIMIT 10"
+            )
+        
+        embed = discord.Embed(title="🌍 Global Leaderboard", color=discord.Color.purple())
+        
+        description = ""
+        for i, row in enumerate(rows, 1):
+            try:
+                user = await self.bot.fetch_user(int(row['user_id']))
+                name = user.display_name
+            except:
+                name = f"User {row['user_id']}"
+            description += f"**{i}.** {name} — **{row['total']:,}** coins\n"
+        
+        embed.description = description if description else "No data found."
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="give", description="Give coins to another user.")
     @app_commands.describe(user="User to give coins to", amount="Amount to give")
