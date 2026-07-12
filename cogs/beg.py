@@ -19,7 +19,7 @@ class Beg(commands.Cog):
     @app_commands.checks.cooldown(1, 45.0, key=lambda i: i.user.id)
     async def beg(self, interaction: discord.Interaction):
         # 45 percent chance they get rejected to keep it slightly grindy
-        if random.random() < 0.45:
+        if random.random() < 0.33:
             rejections = [
                 "Get a job, bum!",
                 "I only give to charity, and you look like trouble.",
