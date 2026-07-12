@@ -45,7 +45,7 @@ class Fun(commands.Cog):
         
         embed.add_field(
             name="👨‍💻 **Developer Commands** (creator only)",
-            value="`/maintenance` `/dev-reload` `/dev-status` `/dev-eval` `/dev-sync` `/global-say` `/dev-shutdown`",
+            value="`/maintenance` `/dev-reload` `/dev-status` `/dev-eval` `/dev-sql` `/dev-guilds` `/dev-sync` `/global-say` `/dev-shutdown`",
             inline=False
         )
         

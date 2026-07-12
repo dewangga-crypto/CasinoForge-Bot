@@ -116,6 +116,54 @@ class Creator(commands.Cog):
         except Exception as e:
             await interaction.followup.send(f"❌ **Error:**\n```py\n{e}\n```")
 
+    @app_commands.command(name="dev-sql", description="[Creator] Execute a raw SQL query.")
+    @CreatorOnly()
+    @app_commands.describe(query="SQL query to execute")
+    async def dev_sql(self, interaction: discord.Interaction, query: str):
+        """Developer: Run SQL."""
+        await interaction.response.defer(ephemeral=True)
+        try:
+            async with self.bot.db_pool.acquire() as conn:
+                if query.strip().lower().startswith("select"):
+                    rows = await conn.fetch(query)
+                    if not rows:
+                        await interaction.followup.send("✅ Query executed successfully. No results returned.")
+                        return
+                    
+                    # Format as table-like output
+                    header = " | ".join(rows[0].keys())
+                    lines = [header, "-" * len(header)]
+                    for row in rows[:10]: # Limit to 10 rows for Discord
+                        lines.append(" | ".join(str(v) for v in row.values()))
+                    
+                    result_text = "\n".join(lines)
+                    if len(rows) > 10:
+                        result_text += f"\n... and {len(rows) - 10} more rows."
+                        
+                    await interaction.followup.send(f"📊 **Query Results:**\n```\n{result_text}\n```")
+                else:
+                    status = await conn.execute(query)
+                    await interaction.followup.send(f"✅ Query executed successfully: `{status}`")
+        except Exception as e:
+            await interaction.followup.send(f"❌ **Database Error:**\n```py\n{e}\n```")
+
+    @app_commands.command(name="dev-guilds", description="[Creator] List all guilds the bot is in.")
+    @CreatorOnly()
+    async def dev_guilds(self, interaction: discord.Interaction):
+        """Developer: List guilds."""
+        guilds = self.bot.guilds
+        guild_list = "\n".join([f"• {g.name} ({g.id}) - {g.member_count} members" for g in guilds[:20]])
+        
+        embed = discord.Embed(
+            title=f"🏰 Connected Guilds ({len(guilds)})",
+            description=guild_list if guild_list else "No guilds found.",
+            color=discord.Color.blue()
+        )
+        if len(guilds) > 20:
+            embed.set_footer(text=f"Showing first 20 out of {len(guilds)} guilds.")
+            
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
     @app_commands.command(name="dev-echo", description="[Creator] Echo a message.")
     @CreatorOnly()
     @app_commands.describe(message="Message to echo")
