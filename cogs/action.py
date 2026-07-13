@@ -339,6 +339,88 @@ class Action(commands.Cog):
         embed.description = description if description else "No data found."
         await interaction.response.send_message(embed=embed)
 
+    @app_commands.command(name="rob", description="Attempt to rob another user's wallet.")
+    @app_commands.describe(user="User to rob")
+    @app_commands.checks.cooldown(1, 7200, key=lambda i: i.user.id) # 2 hour cooldown
+    async def rob(self, interaction: discord.Interaction, user: discord.User):
+        """Robbery command."""
+        if user == interaction.user:
+            return await interaction.response.send_message("❌ You can't rob yourself.", ephemeral=True)
+        if user.bot:
+            return await interaction.response.send_message("❌ You can't rob a bot.", ephemeral=True)
+            
+        await self.ensure_user(interaction.user.id)
+        await self.ensure_user(user.id)
+        
+        async with self.bot.db_pool.acquire() as conn:
+            target_bal = await conn.fetchval("SELECT wallet FROM users WHERE user_id = $1", str(user.id))
+            if target_bal < 500:
+                return await interaction.response.send_message(f"❌ {user.mention} is too poor to rob! They need at least 500 coins.", ephemeral=True)
+            
+            # 35% success chance
+            if random.random() < 0.35:
+                amount = random.randint(100, int(target_bal * 0.4))
+                async with conn.transaction():
+                    await conn.execute("UPDATE users SET wallet = wallet - $1 WHERE user_id = $2", amount, str(user.id))
+                    await conn.execute("UPDATE users SET wallet = wallet + $1 WHERE user_id = $2", amount, str(interaction.user.id))
+                await interaction.response.send_message(f"🥷 **SUCCESS!** You robbed **{amount:,}** coins from {user.mention}!")
+            else:
+                fine = random.randint(200, 500)
+                await conn.execute("UPDATE users SET wallet = GREATEST(0, wallet - $1) WHERE user_id = $2", fine, str(interaction.user.id))
+                await interaction.response.send_message(f"👮 **CAUGHT!** You were caught trying to rob {user.mention} and fined **{fine:,}** coins.")
+
+    @app_commands.command(name="shop", description="View items available for purchase.")
+    async def shop(self, interaction: discord.Interaction):
+        """View shop items."""
+        async with self.bot.db_pool.acquire() as conn:
+            rows = await conn.fetch("SELECT name, description, price FROM items ORDER BY price ASC")
+            
+        if not rows:
+            # Seed default items if shop is empty
+            async with self.bot.db_pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO items (name, description, price, type) VALUES
+                    ('Lucky Charm', 'Increases gambling luck slightly (Collectable)', 5000, 'collectible'),
+                    ('Bank Card', 'Increases bank limit by 10,000', 15000, 'boost'),
+                    ('Shield', 'Protects you from one robbery attempt', 2500, 'usable')
+                    ON CONFLICT DO NOTHING
+                """)
+                rows = await conn.fetch("SELECT name, description, price FROM items ORDER BY price ASC")
+
+        embed = discord.Embed(title="🛒 CasinoForge Shop", color=discord.Color.green())
+        for row in rows:
+            embed.add_field(name=f"{row['name']} — {row['price']:,} coins", value=row['description'], inline=False)
+        
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="buy", description="Buy an item from the shop.")
+    @app_commands.describe(item_name="Name of the item to buy")
+    async def buy(self, interaction: discord.Interaction, item_name: str):
+        """Buy item command."""
+        await self.ensure_user(interaction.user.id)
+        
+        async with self.bot.db_pool.acquire() as conn:
+            item = await conn.fetchrow("SELECT id, name, price, type FROM items WHERE LOWER(name) = $1", item_name.lower())
+            if not item:
+                return await interaction.response.send_message("❌ Item not found.", ephemeral=True)
+            
+            user_wallet = await conn.fetchval("SELECT wallet FROM users WHERE user_id = $1", str(interaction.user.id))
+            if user_wallet < item['price']:
+                return await interaction.response.send_message(f"❌ You don't have enough coins. Price: **{item['price']:,}**", ephemeral=True)
+            
+            async with conn.transaction():
+                await conn.execute("UPDATE users SET wallet = wallet - $1 WHERE user_id = $2", item['price'], str(interaction.user.id))
+                await conn.execute(
+                    "INSERT INTO inventory (user_id, item_id, quantity) VALUES ($1, $2, 1) ON CONFLICT (user_id, item_id) DO UPDATE SET quantity = inventory.quantity + 1",
+                    str(interaction.user.id), item['id']
+                )
+                
+                # Apply instant boosts
+                if item['name'] == 'Bank Card':
+                    await conn.execute("UPDATE users SET bank_limit = bank_limit + 10000 WHERE user_id = $1", str(interaction.user.id))
+            
+            await interaction.response.send_message(f"🛍️ You bought a **{item['name']}** for **{item['price']:,}** coins!")
+
     @app_commands.command(name="give", description="Give coins to another user.")
     @app_commands.describe(user="User to give coins to", amount="Amount to give")
     async def give(self, interaction: discord.Interaction, user: discord.User, amount: int):

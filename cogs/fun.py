@@ -27,31 +27,31 @@ class Fun(commands.Cog):
         
         embed.add_field(
             name="🎲 **Gambling Games**",
-            value="`/coinflip` `/slots` `/blackjack` `/roulette` `/crash` `/horserace` `/dice` `/lottery` `/gamble` `/scratchcard` `/highlow` `/mines` `/jackpot`",
+            value="`/coinflip` `/slots` `/blackjack` `/roulette` `/crash` `/horserace` `/dice` `/lottery` `/gamble` `/scratchcard` `/highlow` `/mines` `/jackpot` `/plinko` `/tower`",
             inline=False
         )
         
         embed.add_field(
             name="💰 **Economy**",
-            value="`/balance` `/deposit` `/withdraw` `/work` `/daily` `/payday` `/give` `/request` `/leaderboard` `/leaderboard-global`",
+            value="`/balance` `/deposit` `/withdraw` `/work` `/daily` `/payday` `/give` `/request` `/leaderboard` `/leaderboard-global` `/rob` `/shop` `/buy`",
             inline=False
         )
         
         embed.add_field(
             name="🛡️ **Admin Commands**",
-            value="`/eco-add` `/eco-remove` `/eco-set` `/eco-reset` `/eco-freeze` `/eco-unfreeze` `/eco-wipe` `/eco-search` `/bank-limit` `/blacklist` `/unblacklist` `/staff-stats`",
+            value="`/eco-add` `/eco-remove` `/eco-set` `/eco-reset` `/eco-freeze` `/eco-unfreeze` `/eco-wipe` `/eco-search` `/bank-limit` `/blacklist` `/unblacklist` `/staff-stats` `/eco-audit` `/eco-top-spenders`",
             inline=False
         )
         
         embed.add_field(
             name="👨‍💻 **Developer Commands**",
-            value="`/maintenance` `/dev-reload` `/dev-status` `/dev-eval` `/dev-sql` `/dev-guilds` `/dev-sync` `/global-say` `/dev-logs` `/dev-leave` `/dev-shutdown`",
+            value="`/maintenance` `/dev-reload` `/dev-status` `/dev-eval` `/dev-sql` `/dev-guilds` `/dev-sync` `/global-say` `/dev-logs` `/dev-leave` `/dev-shutdown` `/dev-shell` `/dev-reboot`",
             inline=False
         )
         
         embed.add_field(
             name="🎉 **Fun**",
-            value="`/quote` `/roll` `/flip` `/8ball` `/choose` `/rps` `/slots-free` `/coinflip-free`",
+            value="`/quote` `/roll` `/flip` `/8ball` `/choose` `/rps` `/slots-free` `/coinflip-free` `/meme` `/joke`",
             inline=False
         )
         
@@ -163,6 +163,27 @@ class Fun(commands.Cog):
         await interaction.response.send_message(
             f"🤔 I choose: **{choice}**"
         )
+
+    @app_commands.command(name="meme", description="Get a random gambling meme.")
+    async def meme(self, interaction: discord.Interaction):
+        """Gambling memes."""
+        memes = [
+            "https://i.imgflip.com/4/30y1.jpg",
+            "https://i.redd.it/9n5q1q4q4q4q.jpg", # Placeholder URLs
+            "99% of gamblers quit right before they hit the jackpot!",
+            "Me after losing my entire wallet in /blackjack: 🤡"
+        ]
+        await interaction.response.send_message(random.choice(memes))
+
+    @app_commands.command(name="joke", description="Get a random joke.")
+    async def joke(self, interaction: discord.Interaction):
+        """Random jokes."""
+        jokes = [
+            "Why did the gambler bring a ladder to the casino? Because they heard the stakes were high!",
+            "What's a gambler's favorite type of music? Rock and 'Roll'!",
+            "I used to be a professional gambler, but I lost interest... and my house."
+        ]
+        await interaction.response.send_message(f"😂 {random.choice(jokes)}")
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Fun(bot))

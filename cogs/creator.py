@@ -258,6 +258,29 @@ class Creator(commands.Cog):
             ephemeral=True
         )
 
+    @app_commands.command(name="dev-shell", description="[Creator] Execute a shell command.")
+    @CreatorOnly()
+    @app_commands.describe(command="Shell command to run")
+    async def dev_shell(self, interaction: discord.Interaction, command: str):
+        """Developer: Run shell command."""
+        await interaction.response.defer(ephemeral=True)
+        try:
+            import subprocess
+            result = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT, timeout=10).decode()
+            if len(result) > 1900:
+                result = result[:1900] + "\n... (truncated)"
+            await interaction.followup.send(f"💻 **Shell Output:**\n```\n{result}\n```")
+        except Exception as e:
+            await interaction.followup.send(f"❌ **Error:**\n```\n{e}\n```")
+
+    @app_commands.command(name="dev-reboot", description="[Creator] Reboot the bot process.")
+    @CreatorOnly()
+    async def dev_reboot(self, interaction: discord.Interaction):
+        """Developer: Reboot bot."""
+        await interaction.response.send_message("🔄 Rebooting...")
+        logger.warning("Bot reboot initiated by creator")
+        os.execv(sys.executable, ['python3'] + sys.argv)
+
 async def setup(bot: commands.Bot):
     await bot.add_cog(Creator(bot))
     logger.info("Creator cog loaded")

@@ -47,6 +47,38 @@ async def init():
         );
     """)
 
+    # Items and Inventory
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS items (
+            id SERIAL PRIMARY KEY,
+            name TEXT UNIQUE,
+            description TEXT,
+            price BIGINT,
+            type TEXT -- 'usable', 'collectible', 'boost'
+        );
+    """)
+
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS inventory (
+            user_id TEXT REFERENCES users(user_id),
+            item_id INTEGER REFERENCES items(id),
+            quantity INTEGER DEFAULT 1,
+            PRIMARY KEY (user_id, item_id)
+        );
+    """)
+
+    # Audit Log for Staff
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS eco_logs (
+            id SERIAL PRIMARY KEY,
+            staff_id TEXT,
+            target_id TEXT,
+            action TEXT,
+            amount BIGINT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
     # Server settings for announcements
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS server_settings (

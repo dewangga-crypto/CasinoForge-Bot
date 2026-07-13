@@ -44,6 +44,8 @@ class Staff(commands.Cog):
         await interaction.response.send_message(
             f"✅ Added **{amount:,}** coins to {user.mention}'s wallet."
         )
+        async with self.bot.db_pool.acquire() as conn:
+            await conn.execute("INSERT INTO eco_logs (staff_id, target_id, action, amount) VALUES ($1, $2, $3, $4)", str(interaction.user.id), str(user.id), "ADD", amount)
 
     @app_commands.command(name="eco-remove", description="[Admin] Remove coins from a user's wallet.")
     @app_commands.describe(user="User to remove coins from", amount="Amount to remove")
@@ -78,6 +80,8 @@ class Staff(commands.Cog):
         await interaction.response.send_message(
             f"✅ Removed **{amount:,}** coins from {user.mention}'s wallet."
         )
+        async with self.bot.db_pool.acquire() as conn:
+            await conn.execute("INSERT INTO eco_logs (staff_id, target_id, action, amount) VALUES ($1, $2, $3, $4)", str(interaction.user.id), str(user.id), "REMOVE", amount)
 
     @app_commands.command(name="eco-set", description="[Admin] Set a user's wallet balance.")
     @app_commands.describe(user="User to set balance for", amount="New balance amount")
@@ -92,6 +96,8 @@ class Staff(commands.Cog):
             await conn.execute("UPDATE users SET wallet = $1 WHERE user_id = $2", amount, str(user.id))
         
         await interaction.response.send_message(f"✅ Set {user.mention}'s wallet to **{amount:,}** coins.")
+        async with self.bot.db_pool.acquire() as conn:
+            await conn.execute("INSERT INTO eco_logs (staff_id, target_id, action, amount) VALUES ($1, $2, $3, $4)", str(interaction.user.id), str(user.id), "SET", amount)
 
     @app_commands.command(name="eco-reset", description="[Admin] Reset a user's entire profile.")
     @app_commands.describe(user="User to reset")
@@ -257,6 +263,37 @@ class Staff(commands.Cog):
         await interaction.response.send_message(
             f"✅ Removed {user.mention} from the blacklist."
         )
+
+    @app_commands.command(name="eco-audit", description="[Admin] View recent economy management logs.")
+    @app_commands.default_permissions(administrator=True)
+    async def eco_audit(self, interaction: discord.Interaction):
+        """Admin: Audit logs."""
+        async with self.bot.db_pool.acquire() as conn:
+            rows = await conn.fetch("SELECT * FROM eco_logs ORDER BY timestamp DESC LIMIT 10")
+            
+        if not rows:
+            return await interaction.response.send_message("No logs found.", ephemeral=True)
+            
+        embed = discord.Embed(title="📜 Economy Audit Logs", color=discord.Color.dark_grey())
+        for row in rows:
+            embed.add_field(
+                name=f"{row['action']} | {row['amount']:,} coins",
+                value=f"Staff: <@{row['staff_id']}>\nTarget: <@{row['target_id']}>\nTime: {row['timestamp'].strftime('%Y-%m-%d %H:%M')}",
+                inline=False
+            )
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="eco-top-spenders", description="[Admin] View users with highest total balance.")
+    @app_commands.default_permissions(administrator=True)
+    async def eco_top_spenders(self, interaction: discord.Interaction):
+        """Admin: Top spenders (actually top balance)."""
+        async with self.bot.db_pool.acquire() as conn:
+            rows = await conn.fetch("SELECT user_id, (wallet + bank) as total FROM users ORDER BY total DESC LIMIT 5")
+            
+        embed = discord.Embed(title="💰 Top Wealth Holders", color=discord.Color.gold())
+        for i, row in enumerate(rows, 1):
+            embed.add_field(name=f"{i}. User {row['user_id']}", value=f"Total: **{row['total']:,}** coins", inline=False)
+        await interaction.response.send_message(embed=embed)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Staff(bot))

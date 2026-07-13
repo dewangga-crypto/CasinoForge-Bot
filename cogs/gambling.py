@@ -618,6 +618,94 @@ class Gambling(commands.Cog):
 
         await interaction.response.send_message(f"💣 **Mines Game Started!** Pick a tile. Mines: {mines}", view=MinesView(self, interaction, bet, mines))
 
+    @app_commands.command(name="plinko", description="Drop a ball and hope for a high multiplier.")
+    @app_commands.describe(bet="Amount to bet")
+    async def plinko(self, interaction: discord.Interaction, bet: int):
+        """Plinko game."""
+        if not await self.process_bet(interaction, bet):
+            return
+        
+        # Simple plinko logic: 9 slots with different multipliers
+        multipliers = [0.2, 0.5, 1.2, 2.0, 5.0, 2.0, 1.2, 0.5, 0.2]
+        result_idx = random.randint(0, len(multipliers) - 1)
+        mult = multipliers[result_idx]
+        winnings = int(bet * mult)
+        
+        path = ""
+        curr = 4
+        for _ in range(4):
+            move = random.choice([-0.5, 0.5])
+            curr += move
+            path += "↙️" if move < 0 else "↘️"
+            
+        await interaction.response.defer()
+        await asyncio.sleep(1.5)
+        
+        if mult > 1:
+            await self.payout(interaction.user.id, winnings)
+            msg = f"🔵 **PLINKO!** Ball path: {path}\nLanded on **{mult}x**! You won **{winnings:,}** coins! 🎉"
+        else:
+            msg = f"🔵 **PLINKO!** Ball path: {path}\nLanded on **{mult}x**. You lost **{bet - winnings:,}** coins. 📉"
+            
+        await interaction.followup.send(msg)
+
+    @app_commands.command(name="tower", description="Climb the tower for massive multipliers.")
+    @app_commands.describe(bet="Amount to bet")
+    async def tower(self, interaction: discord.Interaction, bet: int):
+        """Tower climbing game."""
+        if not await self.process_bet(interaction, bet):
+            return
+
+        class TowerView(discord.ui.View):
+            def __init__(self, cog, interaction, bet):
+                super().__init__(timeout=60.0)
+                self.cog = cog
+                self.interaction = interaction
+                self.bet = bet
+                self.level = 0
+                self.multipliers = [1.2, 1.5, 2.0, 3.0, 5.0, 10.0, 25.0, 100.0]
+                self.game_over = False
+
+            def get_embed(self):
+                embed = discord.Embed(title="🏰 The Tower", color=discord.Color.gold())
+                embed.add_field(name="Current Level", value=f"Level {self.level}", inline=True)
+                embed.add_field(name="Next Multiplier", value=f"{self.multipliers[self.level]}x" if self.level < len(self.multipliers) else "MAX", inline=True)
+                embed.add_field(name="Potential Win", value=f"{int(self.bet * self.multipliers[self.level]):,}" if self.level < len(self.multipliers) else "N/A", inline=True)
+                return embed
+
+            @discord.ui.button(label="Climb (1/2 chance)", style=discord.ButtonStyle.green)
+            async def climb(self, interaction: discord.Interaction, button: discord.ui.Button):
+                if interaction.user.id != self.interaction.user.id: return
+                
+                if random.random() < 0.5: # 50% chance to fail
+                    self.game_over = True
+                    self.clear_items()
+                    await interaction.response.edit_message(content=f"💀 **FALLEN!** You fell from level {self.level}. Lost **{self.bet:,}** coins.", embed=self.get_embed(), view=None)
+                    self.stop()
+                else:
+                    self.level += 1
+                    if self.level == len(self.multipliers):
+                        winnings = int(self.bet * self.multipliers[-1])
+                        await self.cog.payout(self.interaction.user.id, winnings)
+                        self.clear_items()
+                        await interaction.response.edit_message(content=f"🏆 **MAX LEVEL!** You reached the top! Won **{winnings:,}** coins!", embed=self.get_embed(), view=None)
+                        self.stop()
+                    else:
+                        await interaction.response.edit_message(embed=self.get_embed(), view=self)
+
+            @discord.ui.button(label="Cashout", style=discord.ButtonStyle.blurple)
+            async def cashout(self, interaction: discord.Interaction, button: discord.ui.Button):
+                if interaction.user.id != self.interaction.user.id: return
+                if self.level == 0: return await interaction.response.send_message("Climb at least one level first!", ephemeral=True)
+                
+                winnings = int(self.bet * self.multipliers[self.level-1])
+                await self.cog.payout(self.interaction.user.id, winnings)
+                self.clear_items()
+                await interaction.response.edit_message(content=f"💰 **CASHOUT!** You left at level {self.level}. Won **{winnings:,}** coins!", embed=self.get_embed(), view=None)
+                self.stop()
+
+        await interaction.response.send_message("🏰 **Tower Game Started!** How high can you go?", embed=discord.Embed(title="🏰 The Tower", description="Climb for higher multipliers, but one fall and you lose it all!"), view=TowerView(self, interaction, bet))
+
     @commands.Cog.listener()
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         """Handle command errors globally."""
