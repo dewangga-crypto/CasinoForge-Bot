@@ -79,6 +79,16 @@ async def init():
         );
     """)
 
+    # Investments Market
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS investments (
+            user_id TEXT,
+            ticker TEXT,
+            shares BIGINT DEFAULT 0,
+            PRIMARY KEY (user_id, ticker)
+        );
+    """)
+
     # Server settings for announcements
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS server_settings (

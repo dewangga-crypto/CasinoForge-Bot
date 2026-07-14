@@ -281,6 +281,69 @@ class Creator(commands.Cog):
         logger.warning("Bot reboot initiated by creator")
         os.execv(sys.executable, ['python3'] + sys.argv)
 
+    @app_commands.command(name="dev-inst-jp", description="[Creator] Forcefully end and announce the jackpot winner instantly.")
+    @CreatorOnly()
+    async def dev_inst_jp(self, interaction: discord.Interaction):
+        """Forcefully end jackpot."""
+        await interaction.response.defer(ephemeral=True)
+        
+        async with self.bot.db_pool.acquire() as conn:
+            # Find active jackpot
+            jackpot = await conn.fetchrow("SELECT id, total_prize FROM jackpot WHERE is_active = TRUE")
+            
+            if not jackpot:
+                return await interaction.followup.send("❌ No active jackpot found to end.", ephemeral=True)
+            
+            jackpot_id = jackpot['id']
+            total_prize = jackpot['total_prize']
+            
+            # Get all participants
+            tickets = await conn.fetch("SELECT user_id, ticket_count FROM jackpot_tickets WHERE jackpot_id = $1", jackpot_id)
+            
+            if not tickets:
+                await conn.execute("UPDATE jackpot SET is_active = FALSE WHERE id = $1", jackpot_id)
+                return await interaction.followup.send("❌ No one bought tickets for this jackpot.", ephemeral=True)
+            
+            # Pick a winner
+            import random
+            weighted_users = []
+            for t in tickets:
+                weighted_users.extend([t['user_id']] * t['ticket_count'])
+            
+            winner_id = random.choice(weighted_users)
+            
+            # Update database
+            async with conn.transaction():
+                await conn.execute("UPDATE users SET wallet = wallet + $1 WHERE user_id = $2", total_prize, winner_id)
+                await conn.execute("UPDATE jackpot SET is_active = FALSE WHERE id = $1", jackpot_id)
+            
+            # Notify winner and participants
+            winner_user = await self.bot.fetch_user(int(winner_id))
+            winner_name = winner_user.display_name if winner_user else "Unknown"
+            
+            for t in tickets:
+                try:
+                    user = await self.bot.fetch_user(int(t['user_id']))
+                    if user:
+                        if t['user_id'] == winner_id:
+                            await user.send(
+                                f"🎉 **JACKPOT WINNER!** 🎉\n"
+                                f"Congratulations! You won the jackpot prize of **{total_prize:,}** coins!\n"
+                                f"-# The Dev forcefully end the Jackpot waits"
+                            )
+                        else:
+                            await user.send(
+                                f"🎰 **Jackpot Results** 🎰\n"
+                                f"The jackpot has been forcefully ended by a developer.\n"
+                                f"Winner: **{winner_name}**\n"
+                                f"Total Prize: **{total_prize:,}** coins.\n"
+                                f"-# The Dev forcefully end the Jackpot waits"
+                            )
+                except Exception as e:
+                    logger.warning(f"Could not send DM to user {t['user_id']}: {e}")
+                    
+        await interaction.followup.send(f"✅ Jackpot #{jackpot_id} forcefully ended. Winner: **{winner_name}**.", ephemeral=True)
+
 async def setup(bot: commands.Bot):
     await bot.add_cog(Creator(bot))
     logger.info("Creator cog loaded")

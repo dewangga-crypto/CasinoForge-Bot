@@ -27,7 +27,7 @@ class Fun(commands.Cog):
         
         embed.add_field(
             name="🎲 **Gambling Games**",
-            value="`/coinflip` `/slots` `/blackjack` `/roulette` `/crash` `/horserace` `/dice` `/lottery` `/gamble` `/scratchcard` `/highlow` `/mines` `/jackpot` `/plinko` `/tower`",
+            value="`/coinflip` `/slots` `/blackjack` `/roulette` `/crash` `/horserace` `/dice` `/lottery` `/gamble` `/scratchcard` `/highlow` `/mines` `/jackpot` `/plinko` `/tower` `/buy-jackpot`",
             inline=False
         )
         
@@ -45,7 +45,7 @@ class Fun(commands.Cog):
         
         embed.add_field(
             name="👨‍💻 **Developer Commands**",
-            value="`/maintenance` `/dev-reload` `/dev-status` `/dev-eval` `/dev-sql` `/dev-guilds` `/dev-sync` `/global-say` `/dev-logs` `/dev-leave` `/dev-shutdown` `/dev-shell` `/dev-reboot`",
+            value="`/maintenance` `/dev-reload` `/dev-status` `/dev-eval` `/dev-sql` `/dev-guilds` `/dev-sync` `/global-say` `/dev-logs` `/dev-leave` `/dev-shutdown` `/dev-shell` `/dev-reboot` `/dev-inst-jp`",
             inline=False
         )
         
