@@ -43,9 +43,9 @@ class Invest(commands.Cog):
             )
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="buy", description="Buy shares of a fake stock.")
+    @app_commands.command(name="invest", description="Buy shares of a fake stock.")
     @app_commands.describe(ticker="The stock ticker to purchase", shares="Amount of shares to buy")
-    async def buy(self, interaction: discord.Interaction, ticker: Literal["FORGE", "CHIPS", "LUCK"], shares: int):
+    async def invest(self, interaction: discord.Interaction, ticker: Literal["FORGE", "CHIPS", "LUCK"], shares: int):
         if shares <= 0:
             await interaction.response.send_message("❌ Amount of shares must be greater than zero.", ephemeral=True)
             return
@@ -85,9 +85,9 @@ class Invest(commands.Cog):
             logger.error(f"Error executing buy query: {e}")
             await interaction.followup.send("⚠️ Failed to process trade transaction.", ephemeral=True)
 
-    @app_commands.command(name="sell", description="Sell your owned shares.")
+    @app_commands.command(name="sell-stock", description="Sell your owned shares.")
     @app_commands.describe(ticker="The stock ticker to liquidate", shares="Amount of shares to sell")
-    async def sell(self, interaction: discord.Interaction, ticker: Literal["FORGE", "CHIPS", "LUCK"], shares: int):
+    async def sell_stock(self, interaction: discord.Interaction, ticker: Literal["FORGE", "CHIPS", "LUCK"], shares: int):
         if shares <= 0:
             await interaction.response.send_message("❌ Amount of shares must be greater than zero.", ephemeral=True)
             return

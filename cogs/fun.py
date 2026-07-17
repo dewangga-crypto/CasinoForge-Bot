@@ -33,7 +33,7 @@ class Fun(commands.Cog):
         
         embed.add_field(
             name="💰 **Economy**",
-            value="`/balance` `/deposit` `/withdraw` `/work` `/daily` `/payday` `/give` `/request` `/leaderboard` `/leaderboard-global` `/rob` `/shop` `/buy`",
+            value="`/balance` `/deposit` `/withdraw` `/work` `/daily` `/payday` `/give` `/request` `/leaderboard` `/leaderboard-global` `/rob` `/shop` `/buy-item` `/beg` `/market` `/portfolio` `/invest` `/sell-stock`",
             inline=False
         )
         

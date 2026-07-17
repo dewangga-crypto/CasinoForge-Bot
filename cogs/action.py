@@ -393,9 +393,9 @@ class Action(commands.Cog):
         
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="buy", description="Buy an item from the shop.")
+    @app_commands.command(name="buy-item", description="Buy an item from the shop.")
     @app_commands.describe(item_name="Name of the item to buy")
-    async def buy(self, interaction: discord.Interaction, item_name: str):
+    async def buy_item(self, interaction: discord.Interaction, item_name: str):
         """Buy item command."""
         await self.ensure_user(interaction.user.id)
         
